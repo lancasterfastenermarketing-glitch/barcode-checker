@@ -1,0 +1,78 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barcode Compare</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+body{font-family:Arial,sans-serif;background:#f1f4f8;margin:0;padding:20px}
+main{max-width:440px;margin:20px auto;background:white;padding:24px;border-radius:18px;text-align:center}
+button{width:100%;padding:16px;margin:10px 0;border:0;border-radius:10px;background:#1769e0;color:white;font-size:17px}
+.value{padding:12px;background:#f1f4f8;overflow-wrap:anywhere}
+#result{padding:20px;font-size:28px;font-weight:bold;border-radius:10px}
+.match{background:#d9f8e2;color:#08752a}
+.different{background:#ffe0e0;color:#b42318}
+.hidden{display:none}
+</style>
+</head>
+<body>
+<main>
+<h1>Barcode Compare</h1>
+<p id="instruction">Scan the first barcode.</p>
+<div id="reader"></div>
+<button id="scan">Scan First Barcode</button>
+<p>Barcode 1</p><div class="value" id="first">Not scanned</div>
+<p>Barcode 2</p><div class="value" id="second">Not scanned</div>
+<div id="result" class="hidden"></div>
+<button id="again" class="hidden">Scan Again</button>
+</main>
+<script>
+let scanner=null, first=null, busy=false;
+const $=id=>document.getElementById(id);
+async function stop(){
+ if(scanner){try{if(scanner.isScanning)await scanner.stop()}catch(e){}
+ try{await scanner.clear()}catch(e){} scanner=null}
+ $("reader").innerHTML="";
+}
+async function scan(){
+ if(busy)return;busy=true;$("scan").disabled=true;
+ $("instruction").textContent=first===null?"Scanning first barcode…":"Scanning second barcode…";
+ try{
+ scanner=new Html5Qrcode("reader");
+ await scanner.start({facingMode:"environment"},
+ {fps:10,qrbox:{width:260,height:120}},
+ async value=>{
+ if(!busy)return;busy=false;await stop();
+ if(first===null){
+ first=value;$("first").textContent=value;
+ $("instruction").textContent="Now scan the second barcode.";
+ $("scan").textContent="Scan Second Barcode";$("scan").disabled=false;
+ }else{
+ $("second").textContent=value;
+ const same=first===value;
+ $("result").textContent=same?"✓ MATCH":"✕ NO MATCH";
+ $("result").className=same?"match":"different";
+ $("scan").classList.add("hidden");$("again").classList.remove("hidden");
+ $("instruction").textContent="Comparison complete.";
+ }
+ },()=>{});
+ }catch(e){
+ await stop();busy=false;$("scan").disabled=false;
+ $("instruction").textContent="Camera unavailable. Allow camera access and use HTTPS.";
+ }
+}
+$("scan").onclick=scan;
+$("again").onclick=async()=>{
+ await stop();first=null;busy=false;
+ $("first").textContent="Not scanned";$("second").textContent="Not scanned";
+ $("result").className="hidden";$("result").textContent="";
+ $("instruction").textContent="Scan the first barcode.";
+ $("scan").textContent="Scan First Barcode";
+ $("scan").classList.remove("hidden");$("again").classList.add("hidden");
+ $("scan").disabled=false;
+};
+</script>
+</body>
+</html>
