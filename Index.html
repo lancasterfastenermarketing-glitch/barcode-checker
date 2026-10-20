@@ -1,1 +1,181 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Barcode Compare</title>
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: Arial, sans-serif;
+    margin: 0; padding: 24px 16px;
+    background: #f3f5f7; color: #17202a;
+  }
+  main {
+    max-width: 440px; margin: 20px auto;
+    background: white; padding: 24px;
+    border-radius: 20px; text-align: center;
+    box-shadow: 0 4px 20px #00000012;
+  }
+  h1 { margin-top: 0; }
+  .value {
+    overflow-wrap: anywhere; font-size: 18px;
+    padding: 12px; background: #f3f5f7;
+    border-radius: 8px; margin: 10px 0 20px;
+  }
+  button {
+    width: 100%; padding: 16px; margin-top: 12px;
+    border: 0; border-radius: 10px;
+    background: #1769e0; color: white;
+    font-size: 17px; font-weight: bold;
+  }
+  button:disabled { opacity: .45; }
+  #result {
+    margin-top: 20px; padding: 22px 8px;
+    border-radius: 12px; font-size: 28px;
+    font-weight: bold; overflow-wrap: anywhere;
+  }
+  .match { background: #d9f8e2; color: #08752a; }
+  .different { background: #ffe0e0; color: #b42318; }
+  .hidden { display: none; }
+  #reader { width: 100%; margin-top: 16px; }
+  .hint { color: #667085; font-size: 14px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Barcode Compare</h1>
+  <p id="instruction">Scan the first barcode.</p>
+
+  <div id="reader"></div>
+  <button id="scan">Scan First Barcode</button>
+
+  <p>Barcode 1</p>
+  <div class="value" id="first">Not scanned</div>
+
+  <p>Barcode 2</p>
+  <div class="value" id="second">Not scanned</div>
+
+  <div id="result" class="hidden" role="status"></div>
+  <p class="hint" id="hint">
+    Point your rear camera at each barcode.
+  </p>
+  <button id="again" class="hidden">Scan Again</button>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+let scanner = null;
+let firstCode = null;
+let secondCode = null;
+let busy = false;
+
+async function stopScanner() {
+  if (scanner) {
+    try {
+      if (scanner.isScanning) await scanner.stop();
+    } catch (e) {}
+    try { await scanner.clear(); } catch (e) {}
+    scanner = null;
+  }
+  $("reader").innerHTML = "";
+}
+
+async function startScan() {
+  if (busy) return;
+  busy = true;
+  $("scan").disabled = true;
+  $("instruction").textContent =
+    firstCode === null
+      ? "Scanning barcode 1..."
+      : "Scanning barcode 2...";
+
+  try {
+    scanner = new Html5Qrcode("reader");
+    await scanner.start(
+      { facingMode: "environment" },
+      {
+        fps: 12,
+        qrbox: function(width, height) {
+          return {
+            width: Math.min(width * 0.9, 350),
+            height: Math.min(height * 0.45, 160)
+          };
+        },
+        formatsToSupport: [
+          Html5QrcodeSupportedFormats.EAN_13,
+          Html5QrcodeSupportedFormats.EAN_8,
+          Html5QrcodeSupportedFormats.UPC_A,
+          Html5QrcodeSupportedFormats.UPC_E,
+          Html5QrcodeSupportedFormats.CODE_128,
+          Html5QrcodeSupportedFormats.CODE_39,
+          Html5QrcodeSupportedFormats.ITF,
+          Html5QrcodeSupportedFormats.QR_CODE
+        ]
+      },
+      async decodedText => {
+        if (!busy) return;
+        busy = false;
+        await stopScanner();
+
+        if (firstCode === null) {
+          firstCode = decodedText;
+          $("first").textContent = firstCode;
+          $("instruction").textContent =
+            "First barcode captured. Scan the second.";
+          $("scan").textContent = "Scan Second Barcode";
+          $("hint").textContent = "Scan the barcode to compare.";
+          $("scan").disabled = false;
+        } else {
+          secondCode = decodedText;
+          $("second").textContent = secondCode;
+          $("scan").classList.add("hidden");
+          $("again").classList.remove("hidden");
+          $("instruction").textContent = "Comparison complete.";
+
+          const same = firstCode === secondCode;
+          $("result").textContent = same ? "✓ MATCH" : "✕ NO MATCH";
+          $("result").className = same ? "match" : "different";
+          $("hint").textContent = same
+            ? "Both barcode values are identical."
+            : "The barcode values are different.";
+        }
+      },
+      () => {}
+    );
+  } catch (err) {
+    await stopScanner();
+    busy = false;
+    $("instruction").textContent =
+      "Camera unavailable. Allow camera access and try again.";
+    $("hint").textContent =
+      "Use the app over HTTPS and allow camera permission.";
+    $("scan").disabled = false;
+  }
+}
+
+$("scan").addEventListener("click", startScan);
+
+$("again").addEventListener("click", async () => {
+  await stopScanner();
+  firstCode = null;
+  secondCode = null;
+  busy = false;
+
+  $("first").textContent = "Not scanned";
+  $("second").textContent = "Not scanned";
+  $("result").className = "hidden";
+  $("result").textContent = "";
+  $("instruction").textContent = "Scan the first barcode.";
+  $("hint").textContent = "Ready for a new comparison.";
+  $("scan").textContent = "Scan First Barcode";
+  $("scan").classList.remove("hidden");
+  $("again").classList.add("hidden");
+  $("scan").disabled = false;
+});
+</script>
+</body>
+</html>
+
